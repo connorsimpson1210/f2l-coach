@@ -1,0 +1,286 @@
+<title>Last Layer Case Atlas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one narrow reading column; sticky group nav; case cards in an auto-fill grid that drops to one column on phones */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --fg: #16202b;
+  --muted: #5b6875;
+  --line: #d5dbe2;
+  --accent: #0a7f45;
+  --accent-soft: #dcefe4;
+  --grey-sticker: #b4bcc5;
+  --cube-body: #151a20;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --surface: #1a2129; --fg: #e7ecf1; --muted: #98a4b0; --line: #2c3540;
+    --accent: #3fcf86; --accent-soft: #173a29; --grey-sticker: #4a5560; --cube-body: #05070a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --surface: #1a2129; --fg: #e7ecf1; --muted: #98a4b0; --line: #2c3540;
+  --accent: #3fcf86; --accent-soft: #173a29; --grey-sticker: #4a5560; --cube-body: #05070a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.5; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(2rem, 6vw, 3.1rem); line-height: 1.02; margin: 0 0 10px; letter-spacing: -0.02em; text-wrap: balance; }
+h1 em { font-style: normal; color: var(--accent); }
+.lede { max-width: 62ch; color: var(--muted); margin: 0 0 18px; }
+.key { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 22px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; font-size: 0.92rem; margin-bottom: 18px; }
+.key div { min-width: 0; }
+.key b { display: block; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.key code { font-family: var(--mono); font-size: 0.85rem; }
+.sw { display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; vertical-align: -0.05em; margin-right: 3px; border: 1px solid var(--cube-body); }
+.progress { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: var(--muted); margin-bottom: 8px; }
+.bar { flex: 1; max-width: 240px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; margin-bottom: 8px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+nav a { flex: none; font-size: 0.85rem; color: var(--fg); text-decoration: none; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+nav a:hover, nav a:focus-visible { border-color: var(--accent); outline: none; }
+.group { padding-top: 22px; scroll-margin-top: 56px; }
+.ghead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+h2 { font-family: var(--display); font-weight: 600; font-size: 1.45rem; margin: 0; letter-spacing: -0.01em; }
+.count { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.gnote { color: var(--muted); margin: 4px 0 14px; max-width: 62ch; font-size: 0.95rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+@media (max-width: 360px) { .grid { grid-template-columns: 1fr; } }
+.case { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 10px 8px; scroll-margin-top: 60px; }
+.case.done { border-color: var(--accent); background: linear-gradient(var(--accent-soft), var(--accent-soft)) padding-box; }
+.pic { flex: none; width: 96px; }
+.pic svg { display: block; width: 100%; height: auto; }
+.info { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; align-items: center; gap: 10px; }
+.name { font-family: var(--display); font-weight: 800; font-size: 1.2rem; min-width: 1.6em; }
+.moves { font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.learn { margin-left: auto; display: flex; align-items: center; gap: 5px; font-size: 0.78rem; color: var(--muted); cursor: pointer; }
+.learn input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.alg { font-family: var(--mono); font-weight: 700; font-size: 1.02rem; line-height: 1.35; word-spacing: 0.12em; overflow-wrap: anywhere; }
+.alt { font-size: 0.8rem; color: var(--muted); }
+.alt span { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.68rem; margin-right: 4px; }
+.alt code { font-family: var(--mono); }
+.step { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.name { font-family: var(--display); font-weight: 800; font-size: 1.1rem; }
+.case .row { flex-wrap: wrap; row-gap: 2px; }
+.case .name, .case .moves { white-space: nowrap; }
+.tip { margin: 0; font-size: 0.82rem; color: var(--muted); }
+svg .ar { stroke: #11161c; stroke-width: 1.3; stroke-linecap: round; }
+svg .ah { fill: #11161c; }
+svg .dim { opacity: 0.55; }
+svg .body { fill: var(--cube-body); stroke: var(--cube-body); stroke-width: 0.12; stroke-linejoin: round; }
+svg polygon { stroke-linejoin: round; }
+.sw.W { background: #ffffff; } .sw.G { background: #00a34c; } .sw.O { background: #ff6a00; }
+.W { fill: #ffffff; } .Y { fill: #ffd500; } .G { fill: #00a34c; } .B { fill: #0046ad; } .O { fill: #ff6a00; } .R { fill: #c41e3a; } .X { fill: var(--grey-sticker); }
+footer { margin-top: 36px; color: var(--muted); font-size: 0.85rem; max-width: 62ch; }
+input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+</style>
+
+<div class="wrap">
+  <h1>Last layer in <em>16</em> cases</h1>
+  <p class="lede">Every case for the 2-look last layer: two algorithms to get yellow on top, then two to move the pieces into place. Each picture looks straight down on the yellow face, with the side stickers around the edge.</p>
+
+  <div class="key">
+    <div><b>Hold the cube</b>Yellow on top, white on the bottom. The bottom edge of each picture is the side facing you.</div>
+    <div><b>Grey stickers</b>Don't matter for this step.</div>
+    <div><b>Arrows</b>Where each piece moves when you do the algorithm.</div>
+    <div><b>Notation</b><code>r</code> / <code>f</code> turn two layers together. <code>M</code> is the middle slice, turned the same way as <code>L</code>.</div>
+  </div>
+
+  <div class="progress"><span id="prog">0 of 16 learned</span><span class="bar"><i id="progbar"></i></span></div>
+
+  <nav aria-label="Case groups"><a href="#cross">1. Yellow cross</a><a href="#oll">2. Yellow on top</a><a href="#corners">3. Corners into place</a><a href="#edges">4. Edges into place</a></nav>
+
+  <section class="group" id="cross">
+  <header class="ghead"><span class="step">Step 1</span><h2>Yellow cross</h2><span class="count">3 cases</span></header>
+  <p class="gnote">Only the edges matter here. Hold the cube as pictured, then do the algorithm. Corners can be anything.</p>
+  <div class="grid"><article class="case" id="c1">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="X" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="38.19" width="10" height="3.2" rx="1.2"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Line</span><span class="moves">6 moves</span>
+      <label class="learn"><input type="checkbox" id="l1" data-n="1"><span>Learned</span></label></div>
+    <code class="alg">F R U R&#8217; U&#8217; F&#8217;</code>
+    <p class="tip">Hold the line left to right.</p>
+  </div>
+</article>
+<article class="case" id="c2">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="X" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="38.19" width="10" height="3.2" rx="1.2"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">L-shape</span><span class="moves">6 moves</span>
+      <label class="learn"><input type="checkbox" id="l2" data-n="2"><span>Learned</span></label></div>
+    <code class="alg">F U R U&#8217; R&#8217; F&#8217;</code>
+    <p class="tip">Hold the L at back and left.</p>
+  </div>
+</article>
+<article class="case" id="c3">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="X" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="38.19" width="10" height="3.2" rx="1.2"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Dot</span><span class="moves">12 moves</span>
+      <label class="learn"><input type="checkbox" id="l3" data-n="3"><span>Learned</span></label></div>
+    <code class="alg">F R U R&#8217; U&#8217; F&#8217; f R U R&#8217; U&#8217; f&#8217;</code>
+    <p class="tip">Line algorithm, then L algorithm.</p>
+  </div>
+</article></div>
+</section>
+<section class="group" id="oll">
+  <header class="ghead"><span class="step">Step 2</span><h2>Yellow on top</h2><span class="count">7 cases</span></header>
+  <p class="gnote">Cross is done. Count the corners already showing yellow on top, then match where the other yellow stickers point.</p>
+  <div class="grid"><article class="case" id="c4">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="X" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="Y" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="Y" x="27" y="38.19" width="10" height="3.2" rx="1.2"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Sune</span><span class="moves">7 moves</span>
+      <label class="learn"><input type="checkbox" id="l4" data-n="4"><span>Learned</span></label></div>
+    <code class="alg">R U R&#8217; U R U2 R&#8217;</code>
+    <p class="tip">1 corner. Hold it front-left.</p>
+  </div>
+</article>
+<article class="case" id="c5">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="Y" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="Y" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="38.19" width="10" height="3.2" rx="1.2"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Antisune</span><span class="moves">7 moves</span>
+      <label class="learn"><input type="checkbox" id="l5" data-n="5"><span>Learned</span></label></div>
+    <code class="alg">R U2 R&#8217; U&#8217; R U&#8217; R&#8217;</code>
+    <p class="tip">1 corner. Hold it back-right.</p>
+  </div>
+</article>
+<article class="case" id="c6">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="Y" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="38.19" width="10" height="3.2" rx="1.2"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">H</span><span class="moves">11 moves</span>
+      <label class="learn"><input type="checkbox" id="l6" data-n="6"><span>Learned</span></label></div>
+    <code class="alg">R U R&#8217; U R U&#8217; R&#8217; U R U2 R&#8217;</code>
+    <p class="tip">0 corners. Yellow pairs face left and right.</p>
+  </div>
+</article>
+<article class="case" id="c7">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="Y" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="Y" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="Y" x="27" y="38.19" width="10" height="3.2" rx="1.2"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Pi</span><span class="moves">9 moves</span>
+      <label class="learn"><input type="checkbox" id="l7" data-n="7"><span>Learned</span></label></div>
+    <code class="alg">R U2 R2 U&#8217; R2 U&#8217; R2 U2 R</code>
+    <p class="tip">0 corners. Two yellows face left (headlights on the left).</p>
+  </div>
+</article>
+<article class="case" id="c8">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="X" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="Y" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="Y" x="27" y="38.19" width="10" height="3.2" rx="1.2"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Headlights</span><span class="moves">9 moves</span>
+      <label class="learn"><input type="checkbox" id="l8" data-n="8"><span>Learned</span></label></div>
+    <code class="alg">R2 D R&#8217; U2 R D&#8217; R&#8217; U2 R&#8217;</code>
+    <p class="tip">2 corners, at the back. The other two yellows face you.</p>
+  </div>
+</article>
+<article class="case" id="c9">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="X" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="Y" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="Y" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="38.19" width="10" height="3.2" rx="1.2"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">T</span><span class="moves">8 moves</span>
+      <label class="learn"><input type="checkbox" id="l9" data-n="9"><span>Learned</span></label></div>
+    <code class="alg">r U R&#8217; U&#8217; r&#8217; F R F&#8217;</code>
+    <p class="tip">2 corners, on the right. The other yellows face front and back.</p>
+  </div>
+</article>
+<article class="case" id="c10">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="Y" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="X" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="X" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="X" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="Y" x="27" y="38.19" width="10" height="3.2" rx="1.2"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Bowtie</span><span class="moves">8 moves</span>
+      <label class="learn"><input type="checkbox" id="l10" data-n="10"><span>Learned</span></label></div>
+    <code class="alg">F&#8217; r U R&#8217; U&#8217; r&#8217; F R</code>
+    <p class="tip">2 diagonal corners, at back-right and front-left.</p>
+  </div>
+</article></div>
+</section>
+<section class="group" id="corners">
+  <header class="ghead"><span class="step">Step 3</span><h2>Corners into place</h2><span class="count">2 cases</span></header>
+  <p class="gnote">Look for headlights, two matching corner stickers on one side. Edges can be anything; arrows show where the corners go.</p>
+  <div class="grid"><article class="case" id="c11">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="B" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="O" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="R" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="G" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="G" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="O" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="R" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="B" x="27" y="38.19" width="10" height="3.2" rx="1.2"/><line class="ar" x1="30.16" y1="30.16" x2="13.20" y2="13.20"/><path class="ah" d="M11.43,11.43 L15.39,12.28 L12.28,15.39 Z"/><line class="ar" x1="12.2" y1="9.6" x2="26.9" y2="9.6"/><path class="ah" d="M29.4,9.6 L26,11.8 L26,7.39 Z"/><line class="ar" x1="32" y1="12.2" x2="32" y2="26.9"/><path class="ah" d="M32,29.4 L29.8,26 L34.2,26 Z"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">A-perm</span><span class="moves">9 moves</span>
+      <label class="learn"><input type="checkbox" id="l11" data-n="11"><span>Learned</span></label></div>
+    <code class="alg">R&#8217; F R&#8217; B2 R F&#8217; R&#8217; B2 R2</code>
+    <p class="tip">Headlights on one side. Put them at the back.</p>
+  </div>
+</article>
+<article class="case" id="c12">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="O" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="G" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="R" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="G" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="X" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="O" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="X" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="R" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="B" x="27" y="38.19" width="10" height="3.2" rx="1.2"/><line class="ar" x1="28.39" y1="28.39" x2="13.20" y2="13.20"/><path class="ah" d="M11.43,11.43 L15.39,12.28 L12.28,15.39 Z"/><path class="ah" d="M30.16,30.16 L26.20,29.31 L29.31,26.20 Z"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Y-perm</span><span class="moves">17 moves</span>
+      <label class="learn"><input type="checkbox" id="l12" data-n="12"><span>Learned</span></label></div>
+    <code class="alg">F R U&#8217; R&#8217; U&#8217; R U R&#8217; F&#8217; R U R&#8217; U&#8217; R&#8217; F R F&#8217;</code>
+    <p class="tip">No headlights anywhere.</p>
+  </div>
+</article></div>
+</section>
+<section class="group" id="edges">
+  <header class="ghead"><span class="step">Step 4</span><h2>Edges into place</h2><span class="count">4 cases</span></header>
+  <p class="gnote">Corners are done. Turn the top so the corners match their sides, then match the edge pattern.</p>
+  <div class="grid"><article class="case" id="c13">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="R" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="G" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="R" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="G" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="O" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="O" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="R" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="O" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="G" x="27" y="38.19" width="10" height="3.2" rx="1.2"/><line class="ar" x1="29.4" y1="20.79" x2="14.7" y2="20.79"/><path class="ah" d="M12.2,20.79 L15.6,18.59 L15.6,22.99 Z"/><line class="ar" x1="11.43" y1="22.63" x2="17.19" y2="28.39"/><path class="ah" d="M18.96,30.16 L15.00,29.31 L18.11,26.20 Z"/><line class="ar" x1="22.63" y1="30.16" x2="28.39" y2="24.40"/><path class="ah" d="M30.16,22.63 L29.31,26.59 L26.20,23.48 Z"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Ua-perm</span><span class="moves">11 moves</span>
+      <label class="learn"><input type="checkbox" id="l13" data-n="13"><span>Learned</span></label></div>
+    <code class="alg">R U&#8217; R U R U R U&#8217; R&#8217; U&#8217; R2</code>
+    <p class="tip">Solved side at the back. Front edge belongs on the right.</p>
+  </div>
+</article>
+<article class="case" id="c14">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="R" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="O" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="R" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="G" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="R" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="O" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="G" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="O" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="G" x="27" y="38.19" width="10" height="3.2" rx="1.2"/><line class="ar" x1="18.96" y1="30.16" x2="13.20" y2="24.40"/><path class="ah" d="M11.43,22.63 L15.39,23.48 L12.28,26.59 Z"/><line class="ar" x1="30.16" y1="22.63" x2="24.40" y2="28.39"/><path class="ah" d="M22.63,30.16 L23.48,26.20 L26.59,29.31 Z"/><line class="ar" x1="12.2" y1="20.79" x2="26.9" y2="20.79"/><path class="ah" d="M29.4,20.79 L26,22.99 L26,18.59 Z"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Ub-perm</span><span class="moves">11 moves</span>
+      <label class="learn"><input type="checkbox" id="l14" data-n="14"><span>Learned</span></label></div>
+    <code class="alg">R2 U R U R&#8217; U&#8217; R&#8217; U&#8217; R&#8217; U R&#8217;</code>
+    <p class="tip">Solved side at the back. Front edge belongs on the left.</p>
+  </div>
+</article>
+<article class="case" id="c15">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="R" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="O" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="R" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="G" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="G" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="B" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="O" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="R" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="O" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="G" x="27" y="38.19" width="10" height="3.2" rx="1.2"/><line class="ar" x1="26.9" y1="20.79" x2="14.7" y2="20.79"/><path class="ah" d="M12.2,20.79 L15.6,18.59 L15.6,22.99 Z"/><path class="ah" d="M29.4,20.79 L26,22.99 L26,18.59 Z"/><line class="ar" x1="20.79" y1="26.9" x2="20.79" y2="14.7"/><path class="ah" d="M20.79,12.2 L22.99,15.6 L18.59,15.6 Z"/><path class="ah" d="M20.79,29.4 L18.59,26 L22.99,26 Z"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">H-perm</span><span class="moves">7 moves</span>
+      <label class="learn"><input type="checkbox" id="l15" data-n="15"><span>Learned</span></label></div>
+    <code class="alg">M2 U M2 U2 M2 U M2</code>
+    <p class="tip">Opposite edges swap. No side solved.</p>
+  </div>
+</article>
+<article class="case" id="c16">
+  <div class="pic"><svg viewBox="0 0 41.59 41.59" role="img" aria-hidden="true"><rect class="body" x="3.39" y="3.39" width="34.8" height="34.8" rx="2"/><rect class="R" x="0.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="4.6" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="G" x="0.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="15.79" width="10" height="10" rx="1.2"/><rect class="R" x="0.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="4.6" y="27" width="10" height="10" rx="1.2"/><rect class="G" x="4.6" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="4.6" width="10" height="10" rx="1.2"/><rect class="O" x="15.79" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="Y" x="15.79" y="15.79" width="10" height="10" rx="1.2"/><rect class="Y" x="15.79" y="27" width="10" height="10" rx="1.2"/><rect class="R" x="15.79" y="38.19" width="10" height="3.2" rx="1.2"/><rect class="O" x="38.19" y="4.6" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="4.6" width="10" height="10" rx="1.2"/><rect class="B" x="27" y="0.19" width="10" height="3.2" rx="1.2"/><rect class="B" x="38.19" y="15.79" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="15.79" width="10" height="10" rx="1.2"/><rect class="O" x="38.19" y="27" width="3.2" height="10" rx="1.2"/><rect class="Y" x="27" y="27" width="10" height="10" rx="1.2"/><rect class="G" x="27" y="38.19" width="10" height="3.2" rx="1.2"/><line class="ar" x1="17.19" y1="28.39" x2="13.20" y2="24.40"/><path class="ah" d="M11.43,22.63 L15.39,23.48 L12.28,26.59 Z"/><path class="ah" d="M18.96,30.16 L15.00,29.31 L18.11,26.20 Z"/><line class="ar" x1="28.39" y1="17.19" x2="24.40" y2="13.20"/><path class="ah" d="M22.63,11.43 L26.59,12.28 L23.48,15.39 Z"/><path class="ah" d="M30.16,18.96 L26.20,18.11 L29.31,15.00 Z"/></svg></div>
+  <div class="info">
+    <div class="row"><span class="name">Z-perm</span><span class="moves">10 moves</span>
+      <label class="learn"><input type="checkbox" id="l16" data-n="16"><span>Learned</span></label></div>
+    <code class="alg">M&#8217; U M2 U M2 U M&#8217; U2 M2 U&#8217;</code>
+    <p class="tip">Neighbouring edges swap. No side solved.</p>
+  </div>
+</article></div>
+</section>
+
+  <footer>Every picture was made by running its algorithm backwards on a solved cube, and each algorithm was checked to leave the first two layers solved. Before each algorithm you may need to turn the top (U) to line the case up as pictured.</footer>
+</div>
+
+<script>
+(function () {
+  var KEY = 'll-learned-v1', set = {};
+  try { set = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { set = {}; }
+  var boxes = document.querySelectorAll('.learn input');
+  function update() {
+    var n = 0;
+    boxes.forEach(function (b) { var on = !!set[b.dataset.n]; b.checked = on; b.closest('.case').classList.toggle('done', on); if (on) n++; });
+    document.getElementById('prog').textContent = n + ' of 16 learned';
+    document.getElementById('progbar').style.width = (n / 16 * 100) + '%';
+  }
+  boxes.forEach(function (b) {
+    b.addEventListener('change', function () {
+      if (b.checked) set[b.dataset.n] = 1; else delete set[b.dataset.n];
+      try { localStorage.setItem(KEY, JSON.stringify(set)); } catch (e) {}
+      update();
+    });
+  });
+  update();
+})();
+</script>
