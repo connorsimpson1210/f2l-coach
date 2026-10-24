@@ -7,6 +7,8 @@ export interface PairScramble {
   state: State;
   /** Slot → the case that was undone into it (before later set-ups moved pieces around). */
   cases: { slot: SlotId; caseId: number }[];
+  /** U quarter-turns applied after the last case was undone (drill: the case's AUF). */
+  finalAuf: number;
 }
 
 export interface ScrambleOptions {
@@ -54,7 +56,7 @@ export function triggerScramble({ pairs, rng = Math.random }: Pick<ScrambleOptio
     while (moves[0]?.face === 'U') moves.shift(); // a leading U only moves last-layer pieces
     const state = applyAlg(solved(), moves);
     if (4 - solvedSlots(state).length !== n) continue;
-    if (!best || moves.length < best.moves.length) best = { moves, state, cases: [] };
+    if (!best || moves.length < best.moves.length) best = { moves, state, cases: [], finalAuf: 0 };
     if (attempt >= 8 && best) break;
   }
   return best ?? pairScramble({ pairs: n, rng });
@@ -79,10 +81,11 @@ export function pairScramble({ pairs, caseIds, slots, rng = Math.random }: Scram
       const solve = relabelForY(parseAlg(c.alg), slot.yTurns);
       moves.push(...uTurn(Math.floor(rng() * 4)), ...invertAlg(solve));
     }
-    moves.push(...uTurn(Math.floor(rng() * 4)));
+    const finalAuf = Math.floor(rng() * 4);
+    moves.push(...uTurn(finalAuf));
     moves = simplify(moves);
     const state = applyAlg(solved(), moves);
-    if (4 - solvedSlots(state).length === n) return { moves, state, cases };
+    if (4 - solvedSlots(state).length === n) return { moves, state, cases, finalAuf };
   }
   throw new Error('Could not build a scramble');
 }

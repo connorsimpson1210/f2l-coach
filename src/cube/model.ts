@@ -106,6 +106,11 @@ const PERM: Record<Face, Uint8Array[]> = Object.fromEntries(
   }),
 ) as Record<Face, Uint8Array[]>;
 
+/** Where each sticker location goes under a face turn. */
+export function moveTable(m: Move): Uint8Array {
+  return PERM[m.face][m.amount];
+}
+
 export function solved(): State {
   return Uint8Array.from({ length: 54 }, (_, i) => i);
 }

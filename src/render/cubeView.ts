@@ -21,7 +21,14 @@ export const STICKER_COLORS: Record<Face, string> = {
   B: '#1d5bd6',
 };
 
-const HOME = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.46, -0.62, 0, 'XYZ'));
+export type ViewMode = 'orbit' | 'snap';
+
+const DEG = Math.PI / 180;
+const HOME_YAW = -35 * DEG;
+const HOME_PITCH = 26 * DEG;
+const SNAP_PITCH = 27 * DEG;
+/** Two angles per side: each side seen slightly from its left or its right (yaw 0 = green front). */
+export const SNAP_YAWS = [60, 30, -30, -60, -120, -150, -210, -240].map((d) => d * DEG);
 const v3 = (v: Vec3) => new THREE.Vector3(v[0], v[1], v[2]);
 const neg = (v: Vec3): Vec3 => [-v[0], -v[1], -v[2]];
 const quartersFor = (amount: 1 | 2 | 3) => (amount === 3 ? 1 : -amount);
@@ -32,8 +39,6 @@ interface Running {
   start: number;
   duration: number;
   pivots: { group: THREE.Group; axis: THREE.Vector3; angle: number }[];
-  qFrom: THREE.Quaternion;
-  qTo: THREE.Quaternion;
 }
 
 export class CubeView {
@@ -47,11 +52,16 @@ export class CubeView {
   private root = new THREE.Group();
   private cubies: { pos: Vec3; obj: THREE.Group }[] = [];
   private stickers: THREE.Mesh<THREE.ShapeGeometry, THREE.MeshStandardMaterial>[] = [];
-  private queue: (Turn | 'home')[] = [];
+  private queue: Turn[] = [];
   private running: Running | null = null;
   private display: State = solved();
-  /** Orientation after every queued view change — used to map keys to faces. */
-  private viewQ = HOME.clone();
+  /** Turntable view: white always stays on the bottom. viewYaw includes queued y rotations. */
+  private yaw = HOME_YAW;
+  private viewYaw = HOME_YAW;
+  private pitch = HOME_PITCH;
+  private pitchTarget = HOME_PITCH;
+  private mode: ViewMode = 'orbit';
+  private lastFrame = 0;
   private highlight = new Set<number>();
   private raf = 0;
 
@@ -72,7 +82,7 @@ export class CubeView {
     key.position.set(3, 6, 8);
     this.scene.add(key);
     this.scene.add(this.root);
-    this.root.quaternion.copy(HOME);
+    this.applyView();
     this.build();
     this.bindPointer();
 
@@ -93,41 +103,77 @@ export class CubeView {
 
   // ---- Public API ----
 
+  /** Turns whose view change is a y rotation; anything else would tip white off the bottom. */
+  static keepsWhiteDown(turn: Turn) {
+    return !turn.view || Math.abs(turn.view.axis[1]) === 1;
+  }
+
   enqueue(turn: Turn) {
-    if (turn.view) this.viewQ.multiply(axisQuat(turn.view.axis, turn.view.quarters));
+    if (turn.view) this.viewYaw += turn.view.quarters * turn.view.axis[1] * (Math.PI / 2);
     this.queue.push(turn);
   }
 
   /** Jump straight to a state, dropping any queued animation. */
   setState(s: State) {
     this.finishRunning();
-    for (const item of this.queue) {
-      if (item !== 'home' && item.view) this.root.quaternion.multiply(axisQuat(item.view.axis, item.view.quarters));
-      else if (item === 'home') this.root.quaternion.copy(HOME);
-    }
     this.queue = [];
-    this.viewQ.copy(this.root.quaternion);
     this.display = s.slice();
     this.recolor();
   }
 
   /** Animate back to the standard view: white bottom, green front, seen from the top-right. */
   resetView() {
-    this.viewQ.copy(HOME);
-    this.queue.push('home');
+    this.viewYaw = this.nearest(this.mode === 'snap' ? -30 * DEG : HOME_YAW);
+    this.pitchTarget = this.mode === 'snap' ? SNAP_PITCH : HOME_PITCH;
+  }
+
+  setMode(mode: ViewMode) {
+    this.mode = mode;
+    if (mode === 'snap') {
+      this.pitchTarget = SNAP_PITCH;
+      this.snapNearest();
+    }
+  }
+
+  /** Step through the snap angles: +1 moves the view to the right, -1 to the left. */
+  stepView(dir: 1 | -1) {
+    const candidates = SNAP_YAWS.flatMap((y) => [-2, -1, 0, 1, 2].map((m) => y + m * 2 * Math.PI));
+    const ahead = candidates.filter((y) => (dir === 1 ? y < this.viewYaw - 0.05 : y > this.viewYaw + 0.05));
+    this.viewYaw = dir === 1 ? Math.max(...ahead) : Math.min(...ahead);
+    this.pitchTarget = SNAP_PITCH;
+  }
+
+  get viewMode() {
+    return this.mode;
   }
 
   /** The logical face currently seen in a direction (+x = screen right, +y = up, +z = towards you). */
   seenFace(dir: Vec3): Face {
-    const rel = HOME.clone().invert().multiply(this.viewQ);
-    const d = v3(dir);
+    if (dir[1]) return dir[1] > 0 ? 'U' : 'D';
+    const c = Math.cos(this.viewYaw);
+    const sn = Math.sin(this.viewYaw);
     let best: Face = 'F';
     let bestDot = -Infinity;
     for (const f of FACES) {
-      const w = v3(FACE_NORMAL[f]).applyQuaternion(rel).dot(d);
+      const [x, , z] = FACE_NORMAL[f];
+      const w = (x * c + z * sn) * dir[0] + (-x * sn + z * c) * dir[2];
       if (w > bestDot) [best, bestDot] = [f, w];
     }
     return best;
+  }
+
+  private nearest(yaw: number) {
+    const k = Math.round((this.viewYaw - yaw) / (2 * Math.PI));
+    return yaw + k * 2 * Math.PI;
+  }
+
+  private snapNearest() {
+    const candidates = SNAP_YAWS.map((y) => this.nearest(y));
+    this.viewYaw = candidates.reduce((a, b) => (Math.abs(b - this.viewYaw) < Math.abs(a - this.viewYaw) ? b : a));
+  }
+
+  private applyView() {
+    this.root.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'XYZ'));
   }
 
   setHighlight(locs: Iterable<number>) {
@@ -199,13 +245,19 @@ export class CubeView {
   // ---- Animation ----
 
   private tick(now: number) {
+    const dt = Math.min(64, now - (this.lastFrame || now));
+    this.lastFrame = now;
+    const k = 1 - Math.exp(-dt / Math.max(30, this.turnMs / 2.2));
+    this.yaw += (this.viewYaw - this.yaw) * k;
+    this.pitch += (this.pitchTarget - this.pitch) * k;
+    this.applyView();
+
     if (!this.running && this.queue.length) this.startNext(now);
     const r = this.running;
     if (!r) return;
     const t = Math.min(1, (now - r.start) / r.duration);
     const e = ease(t);
     for (const p of r.pivots) p.group.quaternion.setFromAxisAngle(p.axis, p.angle * e);
-    this.root.quaternion.slerpQuaternions(r.qFrom, r.qTo, e);
     if (t >= 1) this.finishRunning();
   }
 
@@ -213,11 +265,6 @@ export class CubeView {
     const item = this.queue.shift()!;
     const backlog = this.queue.length;
     const duration = backlog ? Math.max(35, this.turnMs / (1 + backlog)) : this.turnMs;
-    const qFrom = this.root.quaternion.clone();
-    if (item === 'home') {
-      this.running = { turn: null, start: now, duration: 260, pivots: [], qFrom, qTo: HOME.clone() };
-      return;
-    }
     const pivots = item.moves.map((m) => {
       const normal = FACE_NORMAL[m.face];
       const group = new THREE.Group();
@@ -225,8 +272,7 @@ export class CubeView {
       for (const c of this.cubies) if (dot(c.pos, normal) === 1) group.add(c.obj);
       return { group, axis: v3(normal), angle: (quartersFor(m.amount) * Math.PI) / 2 };
     });
-    const qTo = item.view ? qFrom.clone().multiply(axisQuat(item.view.axis, item.view.quarters)) : qFrom.clone();
-    this.running = { turn: item, start: now, duration, pivots, qFrom, qTo };
+    this.running = { turn: item, start: now, duration, pivots };
   }
 
   private finishRunning() {
@@ -238,7 +284,6 @@ export class CubeView {
       for (const child of [...p.group.children]) this.root.add(child);
       this.root.remove(p.group);
     }
-    this.root.quaternion.copy(r.qTo);
     if (r.turn) {
       this.display = applyAlg(this.display, r.turn.moves);
       this.recolor();
@@ -279,10 +324,12 @@ export class CubeView {
         const dx = e.clientX - last.x;
         const dy = e.clientY - last.y;
         last = { x: e.clientX, y: e.clientY };
-        const len = Math.hypot(dx, dy);
-        if (!len) return;
-        const w = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(dy / len, dx / len, 0), len * 0.008);
-        this.orbit(w);
+        this.viewYaw += dx * 0.009;
+        this.yaw += dx * 0.009;
+        if (this.mode === 'orbit') {
+          this.pitchTarget = Math.min(70 * DEG, Math.max(5 * DEG, this.pitchTarget + dy * 0.006));
+          this.pitch = this.pitchTarget;
+        }
       } else if (mode === 'sticker') {
         const dx = e.clientX - downAt.x;
         const dy = e.clientY - downAt.y;
@@ -294,20 +341,29 @@ export class CubeView {
     });
 
     const end = () => {
+      if (mode === 'orbit' && this.mode === 'snap') this.snapNearest();
       mode = 'none';
       this.canvas.classList.remove('grabbing');
     };
+    let wheel = 0;
+    this.canvas.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        if (this.mode === 'orbit') {
+          this.viewYaw -= e.deltaY * 0.004;
+          return;
+        }
+        wheel += e.deltaY;
+        if (Math.abs(wheel) >= 60) {
+          this.stepView(wheel > 0 ? 1 : -1);
+          wheel = 0;
+        }
+      },
+      { passive: false },
+    );
     this.canvas.addEventListener('pointerup', end);
     this.canvas.addEventListener('pointercancel', end);
-  }
-
-  private orbit(w: THREE.Quaternion) {
-    this.root.quaternion.premultiply(w);
-    this.viewQ.premultiply(w);
-    if (this.running) {
-      this.running.qFrom.premultiply(w);
-      if (this.running.turn) this.running.qTo.premultiply(w);
-    }
   }
 
   private dragTurn(loc: number, dx: number, dy: number): Turn | null {
@@ -336,10 +392,6 @@ export class CubeView {
       view: { axis, quarters: 1 },
     };
   }
-}
-
-function axisQuat(axis: Vec3, quarters: number) {
-  return new THREE.Quaternion().setFromAxisAngle(v3(axis), (quarters * Math.PI) / 2);
 }
 
 function roundedSquare(size: number, r: number) {
