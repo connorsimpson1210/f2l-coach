@@ -1,13 +1,18 @@
 import './styles.css';
+import { LEVELS, levelById, sameCriteria, weightsFor, type Criteria, type LevelId } from '../coach/levels';
+import type { PairOption } from '../coach/planner';
+import { scoreSolve, segmentSolve, type SolveScore, type SolveStep } from '../coach/score';
+import { addCases, addSolve, rolling, suggestDrills, type CaseRecord, type History } from '../coach/stats';
 import { CASES, type CaseGroup } from '../cube/cases';
 import {
   FACE_NORMAL, applyAlg, dot, formatAlg, formatMove, invertAlg, parseAlg, relabelForY, simplify, solved,
   type Face, type Move, type State,
 } from '../cube/model';
+import { recogniseCase } from '../cube/recognise';
 import { pairScramble, triggerScramble, type PairScramble } from '../cube/scramble';
 import { SLOTS, isCrossSolved, solvedSlots, type SlotId } from '../cube/slots';
 import { moveCost, parseRoute, routeText, rotationToken, type Route } from '../cube/solver';
-import { requestRoutes } from '../cube/solverClient';
+import { requestOptions, requestPlan, requestRoutes } from '../cube/solverClient';
 import { DEFAULT_KEYMAP, viewMove } from '../input/keyboard';
 import { CubeView, type Turn, type ViewMode } from '../render/cubeView';
 import { icon } from './icons';
@@ -17,11 +22,26 @@ type Theme = 'system' | 'light' | 'dark';
 type Phase = 'ready' | 'solving' | 'done';
 
 interface Settings { turnMs: number; greyLL: boolean; theme: Theme; viewMode: ViewMode }
-interface Prefs { mode: Mode; pairs: number; drillCases: number[]; myAlgs: Record<number, string> }
-interface Playback { route: Route; steps: Turn[]; tokens: string[]; index: number; playing: boolean; timer: number }
+interface Prefs {
+  mode: Mode; pairs: number; drillCases: number[]; myAlgs: Record<number, string>;
+  level: LevelId; criteria: Criteria;
+}
+interface PlaybackPart { rotation: number; seen: Move[]; moves: Move[] }
+/** Something to watch: one or more parts (a pair each), played from a position and view. */
+interface PlaybackSource { key: string; label: string; from: State; view: number; parts: PlaybackPart[] }
+interface Playback {
+  src: PlaybackSource; steps: Turn[]; tokens: string[]; breaks: Set<number>;
+  index: number; playing: boolean; timer: number;
+}
 
 const uTurn = (n: number): Move[] => (((n % 4) + 4) % 4 ? [{ face: 'U', amount: (((n % 4) + 4) % 4) as 1 | 2 | 3 }] : []);
-interface HistoryEntry { turn: Turn; label: string }
+/** at: ms since the first move; view: y quarter-turns the cube was seen from when the turn was made. */
+interface HistoryEntry { turn: Turn; label: string; at: number; view: number }
+
+const yView = (k: number) => ({ axis: [0, 1, 0] as const, quarters: k === 3 ? 1 : -k });
+const seenOf = (label: string): Move | null => (/^[URFDLB](2|')?$/.test(label) ? parseAlg(label)[0] : null);
+const slotName = (id: SlotId) => SLOTS.find((s) => s.id === id)!.name;
+const tone = (score: number) => (score >= 8.5 ? 'good' : score >= 6.5 ? 'ok' : 'low');
 interface Split { slot: SlotId; ms: number; moves: number }
 
 const GROUP_NAMES: Record<CaseGroup, string> = {
@@ -64,7 +84,17 @@ export class App {
   });
   private prefs: Prefs = store.load('f2l.prefs', {
     mode: 'practice' as Mode, pairs: 1, drillCases: CASES.map((c) => c.id), myAlgs: {} as Record<number, string>,
+    level: 'beginner' as LevelId, criteria: { ...LEVELS[0].criteria },
   });
+  private progress: History = store.load('f2l.history', { solves: [], cases: [] } as History);
+  /** Benchmark solve of the current practice scramble. */
+  private plan: PairOption[] | null = null;
+  private result: SolveScore | null = null;
+  private scoring = false;
+  /** Each scramble is recorded once, even if you retry it after watching. */
+  private recorded = false;
+  /** Where the cube was when you left the results to watch something. */
+  private resultState: State | null = null;
   private routes: Route[] | null = null;
   private routesToken = 0;
   private playback: Playback | null = null;
@@ -88,7 +118,7 @@ export class App {
     stage: HTMLElement; coach: HTMLElement; scramble: HTMLElement; banner: HTMLElement;
     scrambleBar: HTMLElement; player: HTMLElement; viewSeg: HTMLElement;
     modeSeg: HTMLElement; pairs: HTMLElement; drillBtn: HTMLButtonElement;
-    help: HTMLElement; settings: HTMLElement; picker: HTMLElement;
+    help: HTMLElement; settings: HTMLElement; picker: HTMLElement; level: HTMLElement; levelBtn: HTMLElement;
   };
 
   constructor(private root: HTMLElement) {
@@ -127,6 +157,11 @@ export class App {
     this.revealed = false;
     this.warning = null;
     this.routes = null;
+    this.plan = null;
+    this.result = null;
+    this.scoring = false;
+    this.recorded = false;
+    this.resultState = null;
     const token = ++this.routesToken;
     if (drill) {
       const keep = SLOTS.map((sl) => sl.id).filter((id) => id !== 'FR');
@@ -135,6 +170,8 @@ export class App {
         this.routes = routes;
         this.renderCoach();
       });
+    } else {
+      this.requestPlan();
     }
     this.renderScramble();
     this.renderCoach();
@@ -151,8 +188,9 @@ export class App {
       this.phase = 'solving';
       this.startedAt = performance.now();
     }
+    const view = this.currentView();
     this.apply(turn);
-    this.history.push({ turn, label });
+    this.history.push({ turn, label, at: this.startedAt ? performance.now() - this.startedAt : 0, view });
     if (turn.moves.length) this.moves++;
     else this.rotations++;
     this.afterChange();
@@ -200,9 +238,76 @@ export class App {
       this.phase = 'done';
       this.endedAt = performance.now();
       this.revealed = true;
+      this.scoreAttempt();
     }
     this.renderCoach();
     this.renderBanner();
+  }
+
+  // ---- Level, benchmark and score ----
+
+  private weights() {
+    return weightsFor({ level: this.prefs.level, criteria: this.prefs.criteria });
+  }
+
+  /** y quarter-turns the cube is seen from (0 = green front, 1 = orange front…). */
+  private currentView() {
+    return ({ F: 0, R: 1, B: 2, L: 3 } as Partial<Record<Face, number>>)[this.view.seenFace([0, 0, 1])] ?? 0;
+  }
+
+  private requestPlan() {
+    if (!this.scramble || this.prefs.mode !== 'practice') return;
+    const token = this.routesToken;
+    this.plan = null;
+    requestPlan(this.scramble.state, 0, this.weights()).then((plan) => {
+      if (token !== this.routesToken) return;
+      this.plan = plan;
+      this.renderCoach();
+    });
+  }
+
+  /** Score the finished attempt against the benchmark at your level, then record it once. */
+  private scoreAttempt() {
+    if (!this.scramble) return;
+    const w = this.weights();
+    const token = this.routesToken;
+    const steps: SolveStep[] = this.history
+      .filter((h) => h.turn.moves.length)
+      .map((h) => ({ moves: h.turn.moves, seen: seenOf(h.label), at: h.at, view: h.view }));
+    const segments = segmentSolve(this.scramble.state, steps, this.targets);
+    if (!segments.length) return;
+    const caseIds = segments.map((sg) => sg.slots.map((id) => recogniseCase(sg.startState, id)));
+    this.scoring = true;
+    this.result = null;
+    const jobs = segments.map((sg) => ({ state: sg.startState, view: sg.startView, targets: sg.open, keep: sg.keep }));
+    requestOptions(jobs, w).then((options) => {
+      if (token !== this.routesToken) return;
+      this.scoring = false;
+      this.result = scoreSolve(segments, options, caseIds, w);
+      if (!this.recorded) this.record(this.result);
+      this.renderCoach();
+    });
+  }
+
+  private record(r: SolveScore) {
+    this.recorded = true;
+    const source = this.prefs.mode;
+    const cases: CaseRecord[] = r.pairs.flatMap((p) =>
+      p.slots.length === 1 && p.caseIds[0] ? [{ caseId: p.caseIds[0], score: Math.round(p.efficiency * 10) / 10, at: Date.now(), source }] : [],
+    );
+    this.progress = source === 'practice'
+      ? addSolve(this.progress, { at: Date.now(), level: this.prefs.level, score: r.score }, cases)
+      : addCases(this.progress, cases);
+    store.save('f2l.history', this.progress);
+  }
+
+  /** The level or a criterion changed: new benchmark, and rescore a finished solve. */
+  private onProfileChange() {
+    this.savePrefs();
+    this.renderTopbar();
+    this.requestPlan();
+    if (this.phase === 'done') this.scoreAttempt();
+    this.renderCoach();
   }
 
   /** Name a turn the way it looks on screen (R, U', y…). */
@@ -319,6 +424,7 @@ export class App {
             <output for="pairs-range"></output>
           </div>
           <button class="btn" data-ref="drillBtn" data-action="pick"></button>
+          <button class="btn" data-ref="levelBtn" data-action="level" title="Level and scoring criteria"></button>
           <div class="spacer"></div>
           <button class="btn ghost" disabled title="GoCube support is next (milestone 2)">${icon('bluetooth')} Connect GoCube</button>
           <button class="icon-btn" data-action="help" title="Shortcuts (?)" aria-label="Shortcuts">${icon('keyboard')}</button>
@@ -352,17 +458,18 @@ export class App {
       <div class="scrim" data-ref="help" hidden>${this.helpHtml()}</div>
       <div class="scrim drawer" data-ref="settings" hidden></div>
       <div class="scrim" data-ref="picker" hidden></div>
+      <div class="scrim" data-ref="level" hidden></div>
     `;
     const ref = (name: string) => this.root.querySelector<HTMLElement>(`[data-ref="${name}"]`)!;
     this.el = {
       stage: ref('stage'), coach: ref('coach'), scramble: ref('scramble'), banner: ref('banner'),
       scrambleBar: ref('scrambleBar'), player: ref('player'), viewSeg: ref('viewSeg'),
       modeSeg: ref('modeSeg'), pairs: ref('pairs'), drillBtn: ref('drillBtn') as HTMLButtonElement,
-      help: ref('help'), settings: ref('settings'), picker: ref('picker'),
+      help: ref('help'), settings: ref('settings'), picker: ref('picker'), level: ref('level'), levelBtn: ref('levelBtn'),
     };
 
     this.root.addEventListener('click', (e) => this.onClick(e));
-    for (const scrim of [this.el.help, this.el.settings, this.el.picker]) {
+    for (const scrim of [this.el.help, this.el.settings, this.el.picker, this.el.level]) {
       scrim.addEventListener('mousedown', (e) => {
         if (e.target === scrim) this.close(scrim);
       });
@@ -379,7 +486,7 @@ export class App {
   }
 
   private onClick(e: MouseEvent) {
-    const t = (e.target as HTMLElement).closest<HTMLElement>('[data-action], [data-mode], [data-case], [data-group], [data-view], [data-route]');
+    const t = (e.target as HTMLElement).closest<HTMLElement>('[data-action], [data-mode], [data-case], [data-group], [data-view], [data-route], [data-level]');
     if (!t) return;
     if (t.dataset.view) {
       this.setSetting('viewMode', t.dataset.view as ViewMode);
@@ -391,8 +498,21 @@ export class App {
     if (t.dataset.route) {
       const route = this.drillRoutes().find((r) => r.key === t.dataset.route);
       if (route && t.dataset.action === 'star') this.toggleMine(route);
-      else if (route) this.startPlayback(route);
+      else if (route && this.scramble) {
+        this.startPlayback({
+          key: route.key, label: route.label, from: this.scramble.state, view: 0,
+          parts: [{ rotation: route.rotation, seen: route.seen, moves: route.moves }],
+        });
+      }
       t.blur();
+      return;
+    }
+    if (t.dataset.level) {
+      const level = levelById(t.dataset.level as LevelId);
+      this.prefs.level = level.id;
+      this.prefs.criteria = { ...level.criteria };
+      this.renderLevel();
+      this.onProfileChange();
       return;
     }
     if (t.dataset.mode) {
@@ -436,6 +556,16 @@ export class App {
       case 'pb-prev': this.stepPlayback(-1); break;
       case 'pb-next': this.stepPlayback(1); break;
       case 'pb-exit': this.stopPlayback(true); break;
+      case 'pb-retry': this.stopPlayback(); this.resetAttempt(); break;
+      case 'level': this.renderLevel(); this.show(this.el.level); break;
+      case 'level-reset':
+        this.prefs.criteria = { ...levelById(this.prefs.level).criteria };
+        this.renderLevel();
+        this.onProfileChange();
+        break;
+      case 'watch-plan': this.watchPlan(); break;
+      case 'watch-tip': this.watchTip(); break;
+      case 'drill-suggested': this.drillSuggested(); break;
     }
     (t as HTMLElement).blur();
   }
@@ -449,6 +579,9 @@ export class App {
     this.el.drillBtn.hidden = !drill;
     const n = this.prefs.drillCases.length;
     this.el.drillBtn.innerHTML = `${icon('grid', 15)} ${n === CASES.length ? 'All 41 cases' : `${n} case${n === 1 ? '' : 's'}`}`;
+    const level = levelById(this.prefs.level);
+    const custom = !sameCriteria(this.prefs.criteria, level.criteria);
+    this.el.levelBtn.innerHTML = `${icon('gauge', 15)} ${level.name}${custom ? '<span class="subtle">· custom</span>' : ''}`;
     const range = this.el.pairs.querySelector('input')!;
     range.value = String(this.prefs.pairs);
     this.el.pairs.querySelector('output')!.textContent = String(this.prefs.pairs);
@@ -513,6 +646,8 @@ export class App {
       const c = this.drillCase();
       if (c) caseHtml = this.caseHtml(c);
     }
+    const scoreHtml = this.scoreHtml();
+    const showSlots = drill || !scoreHtml;
 
     const elapsed = this.phase === 'ready' ? 0 : (this.endedAt || performance.now()) - this.startedAt;
     this.el.coach.innerHTML = `
@@ -527,11 +662,14 @@ export class App {
           <div class="stat"><div class="label">Moves</div><div class="value">${this.moves}${this.rotations ? `<span class="subtle" style="font-size:13px"> +${this.rotations} rot</span>` : ''}</div></div>
         </div>
       </div>
+      ${drill ? scoreHtml : ''}
       ${caseHtml}
-      <div class="section">
+      ${drill ? '' : scoreHtml}
+      ${showSlots ? `<div class="section">
         <p class="eyebrow">${drill ? 'Slot' : 'Pairs'}</p>
         <div class="slots">${slotsHtml}</div>
-      </div>
+      </div>` : ''}
+      ${this.suggestionsHtml()}
       <div class="section">
         <p class="eyebrow">Your moves</p>
         <div class="history">${
@@ -548,6 +686,108 @@ export class App {
         </div>
       </div>
     `;
+  }
+
+  private scoreHtml() {
+    if (this.phase !== 'done') return '';
+    if (!this.result) {
+      return this.scoring
+        ? `<div class="section"><p class="eyebrow">Score</p><div class="empty loading">${icon('loader', 14)} Scoring your solve…</div></div>`
+        : '';
+    }
+    const r = this.result;
+    const level = levelById(this.prefs.level);
+    const drill = this.prefs.mode === 'drill';
+    const roll = rolling(this.progress, level.id);
+    const trend = roll.trend !== null && Math.abs(roll.trend) >= 0.1
+      ? ` <span class="trend ${roll.trend > 0 ? 'up' : 'down'}">${roll.trend > 0 ? '▲' : '▼'} ${Math.abs(roll.trend).toFixed(1)}</span>`
+      : '';
+    const side = drill
+      ? `<div class="score-side"><div class="muted">${r.pairs[0]?.moves ?? 0} moves · par ${r.pairs[0]?.par ?? 0}</div></div>`
+      : `<div class="score-side">
+          <div><span class="muted">Avg of ${roll.window}</span> <b class="mono">${roll.avg?.toFixed(1) ?? '–'}</b>${trend}</div>
+          <div><span class="muted">Best</span> <b class="mono">${roll.best?.toFixed(1) ?? '–'}</b></div>
+        </div>`;
+    const head = `<div class="score-head">
+        <div class="score-big ${tone(r.score)}">${r.score.toFixed(1)}<span>/10</span></div>
+        ${side}
+      </div>`;
+    if (drill) return `<div class="section"><p class="eyebrow">Score · ${level.name}</p>${head}</div>`;
+
+    const rows = r.pairs
+      .map((p) => {
+        const slot = SLOTS.find((x) => x.id === p.slots[0])!;
+        const bits = [`${p.moves} moves · par ${p.par}`];
+        if (p.rotations && this.prefs.criteria.rotations) bits.push(`${p.rotations} rot`);
+        if (p.flow !== null && p.flow < 8.5) bits.push(`${(p.pauseMs / 1000).toFixed(1)}s pause`);
+        if (p.choice !== null && p.choice < 8.5) bits.push('harder pair first');
+        const caseTag = p.caseIds[0] ? `<span class="case-tag">#${p.caseIds[0]}</span>` : '';
+        return `<div class="pair-score">
+          <span class="swatch"><i style="background:${SLOT_CSS[slot.colors[0]]}"></i><i style="background:${SLOT_CSS[slot.colors[1]]}"></i></span>
+          <div class="ps-main">
+            <div class="ps-name">${p.slots.map(slotName).join(' + ')}${caseTag}</div>
+            <div class="ps-detail">${bits.join(' · ')}</div>
+          </div>
+          <span class="ps-score ${tone(p.score)}">${p.score.toFixed(1)}</span>
+        </div>`;
+      })
+      .join('');
+    const tip = r.tip
+      ? `<div class="tip">${icon('lightbulb', 16)}<div><p>${esc(r.tip.text)}</p>
+          <button class="btn sm" data-action="watch-tip">${icon('play', 13)} Watch a better way</button></div></div>`
+      : `<div class="tip good">${icon('check', 16)}<div><p>Nothing big to fix. A clean ${level.name.toLowerCase()} solve.</p></div></div>`;
+    return `<div class="section">
+      <p class="eyebrow">Score · ${level.name}</p>
+      ${head}
+      <div class="pair-scores">${rows}</div>
+      ${tip}
+      <button class="btn block" data-action="watch-plan" style="margin-top:10px" ${this.plan ? '' : 'disabled'}>
+        ${this.plan ? icon('play', 14) : icon('loader', 14)} Watch the ${level.name.toLowerCase()} benchmark
+      </button>
+    </div>`;
+  }
+
+  /** Cases that keep costing you across recent solves (never from a single bad one). */
+  private suggestionsHtml() {
+    if (this.prefs.mode !== 'practice' || this.phase === 'solving') return '';
+    const s = suggestDrills(this.progress);
+    if (!s.length) return '';
+    const chips = s
+      .map((d) => `<span class="chip static" title="About ${d.estimate.toFixed(1)}/10 over ${d.seen} recent pairs (your usual ${d.norm.toFixed(1)})">${d.caseId}</span>`)
+      .join('');
+    return `<div class="section">
+      <p class="eyebrow">Worth drilling</p>
+      <p class="muted note">These cases have cost you moves over several solves, not just once.</p>
+      <div class="chips">${chips}</div>
+      <button class="btn block" data-action="drill-suggested" style="margin-top:12px">${icon('target', 15)} Drill ${s.length === 1 ? 'this case' : `these ${s.length} cases`}</button>
+    </div>`;
+  }
+
+  private watchPlan() {
+    if (!this.plan || !this.scramble) return;
+    const level = levelById(this.prefs.level);
+    this.startPlayback({ key: 'plan', label: `${level.name} benchmark`, from: this.scramble.state, view: 0, parts: this.plan });
+  }
+
+  private watchTip() {
+    const tip = this.result?.tip;
+    if (!tip) return;
+    const pair = this.result!.pairs[tip.pair];
+    this.startPlayback({
+      key: 'tip', label: `Better ${slotName(tip.route.slot).toLowerCase()}`,
+      from: pair.startState, view: pair.startView, parts: [tip.route],
+    });
+  }
+
+  private drillSuggested() {
+    const ids = suggestDrills(this.progress).map((d) => d.caseId);
+    if (!ids.length) return;
+    this.prefs.drillCases = ids.sort((a, b) => a - b);
+    this.prefs.mode = 'drill';
+    this.savePrefs();
+    this.renderTopbar();
+    this.newScramble();
+    this.toast(`Drilling case${ids.length === 1 ? '' : 's'} ${ids.join(', ')}`);
   }
 
   // ---- Drill routes ----
@@ -618,7 +858,7 @@ export class App {
       .map((r) => {
         const starred = r.key === 'mine' || (mineText !== undefined && this.canonical(r) === mineText && !routes.some((x) => x.key === 'mine'));
         const count = r.seen.length;
-        const active = this.playback?.route.key === r.key;
+        const active = this.playback?.src.key === r.key;
         return `<div class="route ${active ? 'active' : ''}">
           <div class="route-head">
             <span class="route-label">${esc(r.label)}</span>
@@ -651,28 +891,38 @@ export class App {
 
   // ---- Playback: watch a route on the cube from the standard angle ----
 
-  private startPlayback(route: Route) {
+  private startPlayback(src: PlaybackSource) {
     if (!this.scramble) return;
+    // Watching from the practice results keeps your solve; coming back restores it.
+    const results = this.resultState ?? (this.prefs.mode === 'practice' && this.phase === 'done' ? this.state.slice() : null);
     this.stopPlayback();
-    this.state = this.scramble.state.slice();
-    this.view.setState(this.state);
-    this.view.resetView();
-    this.history = [];
-    this.moves = this.rotations = 0;
+    this.resultState = results;
+    if (!results) {
+      this.history = [];
+      this.moves = this.rotations = 0;
+    }
     this.warning = null;
     this.renderBanner();
+    this.state = src.from.slice();
+    this.view.setState(this.state);
+    this.view.resetView();
+    if (src.view) this.view.enqueue({ moves: [], view: yView(src.view) });
     const steps: Turn[] = [];
     const tokens: string[] = [];
-    if (route.rotation) {
-      steps.push({ moves: [], view: { axis: [0, 1, 0], quarters: route.rotation === 3 ? 1 : -route.rotation } });
-      tokens.push(rotationToken(route.rotation));
+    const breaks = new Set<number>();
+    for (const part of src.parts) {
+      if (tokens.length) breaks.add(tokens.length);
+      if (part.rotation) {
+        steps.push({ moves: [], view: yView(part.rotation) });
+        tokens.push(rotationToken(part.rotation));
+      }
+      part.moves.forEach((m, i) => {
+        steps.push({ moves: [m] });
+        tokens.push(formatMove(part.seen[i]));
+      });
     }
-    route.moves.forEach((m, i) => {
-      steps.push({ moves: [m] });
-      tokens.push(formatMove(route.seen[i]));
-    });
     this.view.turnMs = Math.max(this.settings.turnMs, 300);
-    this.playback = { route, steps, tokens, index: 0, playing: true, timer: 0 };
+    this.playback = { src, steps, tokens, breaks, index: 0, playing: true, timer: 0 };
     this.schedulePlayback(650);
     this.renderPlayer();
     this.renderCoach();
@@ -718,7 +968,7 @@ export class App {
     const pb = this.playback;
     if (!pb) return;
     if (!pb.playing && pb.index >= pb.steps.length) {
-      this.startPlayback(pb.route);
+      this.startPlayback(pb.src);
       return;
     }
     pb.playing = !pb.playing;
@@ -727,25 +977,42 @@ export class App {
     this.renderPlayer();
   }
 
-  /** Leave playback; with `reset`, put the case back so you can try it yourself. */
+  /** Leave playback; with `reset`, go back to your results, or put the case back so you can try it yourself. */
   private stopPlayback(reset = false) {
     const pb = this.playback;
     if (!pb) return;
     clearTimeout(pb.timer);
     this.playback = null;
     this.view.turnMs = this.settings.turnMs;
-    if (reset && this.scramble) {
-      this.state = this.scramble.state.slice();
+    if (reset && this.resultState) {
+      this.state = this.resultState;
+      this.resultState = null;
       this.view.setState(this.state);
       this.view.resetView();
-      this.history = [];
-      this.splits = [];
-      this.phase = 'ready';
-      this.moves = this.rotations = 0;
-      this.startedAt = this.endedAt = 0;
-      this.warning = null;
-      this.renderBanner();
+    } else if (reset) {
+      this.resetAttempt();
+      return;
     }
+    this.renderPlayer();
+    this.renderCoach();
+  }
+
+  /** Put the scramble back and start the attempt over (it's only recorded the first time). */
+  private resetAttempt() {
+    if (!this.scramble) return;
+    this.resultState = null;
+    this.state = this.scramble.state.slice();
+    this.view.setState(this.state);
+    this.view.resetView();
+    this.history = [];
+    this.splits = [];
+    this.phase = 'ready';
+    this.moves = this.rotations = 0;
+    this.startedAt = this.endedAt = 0;
+    this.warning = null;
+    this.result = null;
+    this.scoring = false;
+    this.renderBanner();
     this.renderPlayer();
     this.renderCoach();
   }
@@ -768,12 +1035,12 @@ export class App {
     this.el.scrambleBar.hidden = !!pb;
     if (!pb) return;
     const tokens = pb.tokens
-      .map((t, i) => `<span class="${i < pb.index ? 'done' : i === pb.index ? 'next' : ''}">${esc(t)}</span>`)
+      .map((t, i) => `<span class="${i < pb.index ? 'done' : i === pb.index ? 'next' : ''}${pb.breaks.has(i) ? ' part' : ''}">${esc(t)}</span>`)
       .join('');
     const finished = pb.index >= pb.steps.length;
     this.el.player.innerHTML = `
       <div class="player-head">
-        <span class="player-label">${icon('play', 13)} ${esc(pb.route.label)}</span>
+        <span class="player-label">${icon('play', 13)} ${esc(pb.src.label)}</span>
         <span class="subtle mono">${pb.index} / ${pb.steps.length}</span>
       </div>
       <div class="player-alg">${tokens}</div>
@@ -782,7 +1049,8 @@ export class App {
         <button class="btn primary" data-action="pb-play" style="min-width:104px">${icon(pb.playing ? 'pause' : finished ? 'rotate' : 'play', 14)} ${pb.playing ? 'Pause' : finished ? 'Replay' : 'Play'} <kbd>Space</kbd></button>
         <button class="icon-btn" data-action="pb-next" title="Step forward (.)" aria-label="Step forward">${icon('chevron-right')}</button>
         <div style="flex:1"></div>
-        <button class="btn" data-action="pb-exit">Try it yourself <kbd>Enter</kbd></button>
+        ${this.resultState ? '<button class="btn ghost" data-action="pb-retry">Retry scramble</button>' : ''}
+        <button class="btn" data-action="pb-exit">${this.resultState ? 'Back to results' : 'Try it yourself'} <kbd>Enter</kbd></button>
       </div>`;
   }
 
@@ -815,7 +1083,7 @@ export class App {
       ['Space', 'New scramble'], ['Enter', 'Show routes / next'], ['⌫', 'Undo'], ['Esc', 'Reset view'],
       ['← →', 'Step view angle'], ['?', 'This help'],
     ];
-    const playback: [string, string][] = [['Space', 'Play / pause'], [', .', 'Step back / forward'], ['Enter', 'Try it yourself']];
+    const playback: [string, string][] = [['Space', 'Play / pause'], [', .', 'Step back / forward'], ['Enter', 'Try it yourself / back to results']];
     return `<div class="dialog" role="dialog" aria-label="Shortcuts">
       <header><h2>Keyboard shortcuts</h2><button class="icon-btn" data-action="close" aria-label="Close">${icon('x')}</button></header>
       <div class="content">
@@ -854,6 +1122,41 @@ export class App {
           this.setSetting('turnMs', Number(input.value));
           this.el.settings.querySelector('[data-ref="speed-hint"]')!.textContent = `${input.value} ms per turn`;
         }
+      });
+    });
+  }
+
+  private renderLevel() {
+    const p = this.prefs;
+    const level = levelById(p.level);
+    const cards = LEVELS.map((l) => `<button class="level-card" data-level="${l.id}" aria-pressed="${p.level === l.id}">
+        <span class="level-name">${l.name}</span><span class="level-blurb">${l.blurb}</span>
+      </button>`).join('');
+    const criteria: [keyof Criteria, string, string][] = [
+      ['rotations', 'Count cube rotations', 'Rotations cost points, and the benchmark avoids them'],
+      ['littleF', 'Little F and B moves', 'Let the benchmark use F and B turns, not just R, U and L'],
+      ['backSlots', 'Back slots without rotating', 'Solve back pairs from the front, the way faster solvers do'],
+      ['flow', 'Score flow', 'Pauses while you look for the next pair cost points. Turn off when you’re not going for time'],
+    ];
+    const fields = criteria.map(([k, label, hint]) => `<div class="field">
+        <div><div class="label">${label}</div><div class="hint">${hint}</div></div>
+        <label class="switch"><input type="checkbox" data-criterion="${k}" ${p.criteria[k] ? 'checked' : ''} aria-label="${label}" /><span></span></label>
+      </div>`).join('');
+    const custom = !sameCriteria(p.criteria, level.criteria);
+    this.el.level.innerHTML = `<div class="dialog" role="dialog" aria-label="Level">
+      <header><h2>Level</h2><button class="icon-btn" data-action="close" aria-label="Close">${icon('x')}</button></header>
+      <div class="content">
+        <p class="muted" style="margin:0 0 14px">Your level sets what the benchmark solve looks like and how strict the score is. You're scored against a good solve at your level, not the one perfect answer.</p>
+        <div class="levels">${cards}</div>
+        <div class="criteria-head"><p class="eyebrow" style="margin:0">Criteria</p>${custom ? `<button class="btn ghost sm" data-action="level-reset">Reset to ${level.name} defaults</button>` : ''}</div>
+        ${fields}
+      </div>
+    </div>`;
+    this.el.level.querySelectorAll<HTMLInputElement>('[data-criterion]').forEach((input) => {
+      input.addEventListener('change', () => {
+        this.prefs.criteria = { ...this.prefs.criteria, [input.dataset.criterion as keyof Criteria]: input.checked };
+        this.onProfileChange();
+        this.renderLevel();
       });
     });
   }
@@ -898,7 +1201,7 @@ export class App {
   }
 
   private openDialog(): HTMLElement | null {
-    return [this.el.help, this.el.settings, this.el.picker].find((s) => !s.hidden) ?? null;
+    return [this.el.help, this.el.settings, this.el.picker, this.el.level].find((s) => !s.hidden) ?? null;
   }
 
   private setSetting<K extends keyof Settings>(key: K, value: Settings[K]) {

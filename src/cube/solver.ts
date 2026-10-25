@@ -19,21 +19,22 @@ export const COST = {
   y: 1.6, y2: 2.8,
   handSwitch: 0.3,
 };
+export type CostTable = typeof COST;
 
-export function moveCost(moves: readonly Move[]): number {
+export function moveCost(moves: readonly Move[], cost: CostTable = COST): number {
   let total = 0;
   let hand: 'R' | 'L' | null = null;
   for (const m of moves) {
-    total += m.amount === 2 ? COST[`${m.face}2` as keyof typeof COST] : COST[m.face];
+    total += m.amount === 2 ? cost[`${m.face}2` as keyof CostTable] : cost[m.face];
     if (m.face === 'R' || m.face === 'L') {
-      if (hand && hand !== m.face) total += COST.handSwitch;
+      if (hand && hand !== m.face) total += cost.handSwitch;
       hand = m.face;
     }
   }
   return total;
 }
 
-const rotationCost = (k: number) => (k === 0 ? 0 : k === 2 ? COST.y2 : COST.y);
+export const rotationCost = (k: number) => (k === 0 ? 0 : k === 2 ? COST.y2 : COST.y);
 export const rotationToken = (k: number) => ['', 'y', 'y2', "y'"][k];
 
 /** Logical moves as seen after a y^k rotation of the view. */
@@ -265,15 +266,26 @@ export function solveSlot(state: State, opts: SolveOptions): SolveResult {
 
 const TRIGGERS = ["R U R'", "R U' R'", "R U2 R'", "F' U F", "F' U' F", "F' U2 F"].map(parseAlg);
 
-export function intuitiveSolutions(state: State, target: SlotId, keep: readonly SlotId[], maxTriggers = 4): Move[][] {
+export function intuitiveSolutions(
+  state: State, target: SlotId, keep: readonly SlotId[], maxTriggers = 4, useF = true,
+): Move[][] {
   const slot = SLOTS.find((s) => s.id === target)!;
   const slotsInPlay = [target, ...keep.filter((k) => k !== target)];
   const { start, h } = tracker(state, slotsInPlay);
+  // Also allow inserts on any unsolved slot that holds one of the pieces, to take it out.
+  const { corner, edge } = SLOT_REFS[target];
+  const at = (ref: number) => STICKERS[state.indexOf(ref)].pos;
+  const same = (a: Vec3, b: Vec3) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  const holders = SLOTS.filter(
+    (s) => s.id !== target && !keep.includes(s.id) && (same(at(corner), s.corner) || same(at(edge), s.edge)),
+  );
   const macros: Move[][] = [];
-  for (const t of TRIGGERS) {
-    for (let u = 0; u < 4; u++) {
-      const setup: Move[] = u ? [{ face: 'U', amount: u as 1 | 2 | 3 }] : [];
-      macros.push([...setup, ...relabelForY(t, slot.yTurns)]);
+  for (const sl of [slot, ...holders]) {
+    for (const t of TRIGGERS.filter((tr) => useF || tr[0].face !== 'F')) {
+      for (let u = 0; u < 4; u++) {
+        const setup: Move[] = u ? [{ face: 'U', amount: u as 1 | 2 | 3 }] : [];
+        macros.push([...setup, ...relabelForY(t, sl.yTurns)]);
+      }
     }
   }
   const macroTables = macros.map((ms) => {
